@@ -5,12 +5,13 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/security/Pausable.sol";
 
 /**
  * @title Campaigns
  * @dev A contract for managing fundraising campaigns on Ethereum with optional refund based targets for donors
  */
-contract Campaigns is Ownable, ReentrancyGuard {
+contract Campaigns is Ownable, ReentrancyGuard, Pausable {
     using SafeMath for uint256;
 
     // Struct definitions
@@ -118,7 +119,7 @@ contract Campaigns is Ownable, ReentrancyGuard {
      * @param _commitmentHash Hash of campaign details and a secret
      * @return campaignId The ID of the created campaign
      */
-    function createCampaignCommitment(bytes32 _commitmentHash) external returns (uint256) {
+    function createCampaignCommitment(bytes32 _commitmentHash) external whenNotPaused returns (uint256) {
         // require(campaignCount[msg.sender] < MAX_CAMPAIGNS_PER_ADDRESS, "Campaign limit reached");
         campaignCount[msg.sender]++;
 
@@ -274,7 +275,7 @@ contract Campaigns is Ownable, ReentrancyGuard {
         uint256 _campaignId,
         string memory _message,
         address _referrer
-    ) external payable nonReentrant {
+    ) external payable nonReentrant whenNotPaused {
         // require(donationCount[msg.sender] < MAX_DONATIONS_PER_ADDRESS, "Donation limit reached");
         donationCount[msg.sender]++;
 
@@ -327,7 +328,7 @@ contract Campaigns is Ownable, ReentrancyGuard {
      * @dev Process escrowed donations for a campaign
      * @param _campaignId Campaign ID to process donations for
      */
-    function processEscrowedDonations(uint256 _campaignId, uint256 _batchSize) external nonReentrant {
+    function processEscrowedDonations(uint256 _campaignId, uint256 _batchSize) external nonReentrant whenNotPaused {
         Campaign storage campaign = campaigns[_campaignId];
         require(campaign.escrowBalance > 0, "No escrowed donations to process");
         require(campaign.totalRaisedAmount >= campaign.minAmount, "Minimum amount not reached");
@@ -630,5 +631,19 @@ contract Campaigns is Ownable, ReentrancyGuard {
     // Add this function to check total fees
     function checkTotalFees(uint256 _protocolFee, uint256 _referralFee, uint256 _creatorFee) internal pure {
         require(_protocolFee + _referralFee + _creatorFee <= MAX_TOTAL_FEE_BASIS_POINTS, "Total fees exceed 100%");
+    }
+
+    /**
+     * @dev Pause the contract
+     */
+    function pause() external onlyOwner {
+        _pause();
+    }
+
+    /**
+     * @dev Unpause the contract
+     */
+    function unpause() external onlyOwner {
+        _unpause();
     }
 }

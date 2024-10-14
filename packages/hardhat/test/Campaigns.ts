@@ -1,5 +1,7 @@
 /* eslint-disable */
 
+// add pause logic and new contract logic
+
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import { Campaigns } from "../typechain-types";
