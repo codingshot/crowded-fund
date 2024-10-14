@@ -63,7 +63,7 @@ Visit your app on: `http://localhost:3000`. You can interact with your smart con
 
 **What's next**:
 
-- Edit your smart contract `YourContract.sol` in `packages/hardhat/contracts`
+- Edit your smart contract `Campaigns.sol` in `packages/hardhat/contracts`
 - Edit your frontend homepage at `packages/nextjs/app/page.tsx`. For guidance on [routing](https://nextjs.org/docs/app/building-your-application/routing/defining-routes) and configuring [pages/layouts](https://nextjs.org/docs/app/building-your-application/routing/pages-and-layouts) checkout the Next.js documentation.
 - Edit your deployment scripts in `packages/hardhat/deploy`
 - Edit your smart contract test in: `packages/hardhat/test`. To run test use `yarn hardhat:test`
@@ -163,4 +163,56 @@ The main contract `Campaigns.sol` contains the following key components:
 - Implement a time-lock mechanism for critical parameter changes
 - Develop a factory contract for easier deployment and management of multiple campaign contracts
 
-For more detailed information on the contract implementation, please refer to the `Campaigns.sol` file in the repository.
+### Recent Updates
+
+1. **Claim Functionality**: Implemented a pull-based refund system with `claimRefund` and `claimAllRefunds` functions, allowing donors to claim refunds for failed campaigns.
+
+2. **Official Campaign Status**: Added an `isOfficial` boolean to the Campaign struct, which is set to true if the campaign creator is also the recipient. This can be updated using the `setOfficialStatus` function.
+
+3. **Commit-Reveal Scheme**: Implemented a two-step process for creating campaigns using a commit-reveal scheme to prevent front-running.
+
+4. **Gas Optimization**: Improved gas efficiency by using `uint256` for most numeric values and employing structs to group related data.
+
+### Key Functions
+
+- `createCampaignCommitment`: Create a new campaign commitment
+- `revealCampaign`: Reveal the campaign details after commitment
+- `updateCampaign`: Update an existing campaign (only by owner, before start)
+- `donate`: Make a donation to a specific campaign
+- `processEscrowedDonations`: Process escrowed donations after reaching the minimum goal
+- `claimRefund`: Claim a refund for a specific donation
+- `claimAllRefunds`: Claim all refunds for a campaign
+- `setOfficialStatus`: Set the official status of a campaign (only by recipient)
+
+### Testing Framework
+
+The contract is tested using the Hardhat testing framework with Chai assertions. The test file `Campaigns.ts` contains various test suites that cover different aspects of the contract functionality.
+
+#### Key Test Suites
+
+1. **Deployment**: Tests the initial state of the contract after deployment.
+2. **Campaign Creation and Management**: Tests creating, revealing, and updating campaigns.
+3. **Donations**: Tests making donations, processing escrowed donations, and handling campaign end conditions.
+4. **Refunds**: Tests the refund claiming process for failed campaigns.
+5. **Admin Functions**: Tests owner-only functions for updating fee structures and withdrawing stuck funds.
+6. **Edge Cases and Attack Vectors**: Tests various edge cases and potential attack scenarios.
+7. **Gas Limit and Large Scale Operations**: Tests handling of large numbers of donations and refunds.
+8. **Official Campaign Status**: Tests setting and checking the official status of campaigns.
+
+#### How the Testing Framework Works
+
+1. The tests use the `ethers` library to interact with the smart contract.
+2. Before each test suite, the contract is deployed to a local Hardhat network.
+3. Test cases use `async/await` syntax to handle asynchronous contract interactions.
+4. Chai assertions (`expect`) are used to verify the expected outcomes of contract function calls.
+5. The `ethers.provider` is used to manipulate the blockchain state (e.g., increasing time) for testing time-dependent functionality.
+6. Events emitted by the contract are captured and verified in relevant test cases.
+
+To run the tests, use the command `yarn hardhat test` in the project directory.
+
+For more detailed information on the contract implementation and tests, please refer to the `Campaigns.sol` and `Campaigns.ts` files in the repository.
+
+
+# Potlock
+based on potlock campaign contract on NEAR https://github.com/PotLock/core/tree/feat/campaigns/contracts/campaigns
+For more on Potlock https://docs.potlock.io 

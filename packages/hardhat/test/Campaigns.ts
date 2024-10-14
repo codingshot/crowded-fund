@@ -659,12 +659,95 @@ describe("Campaigns", function () {
     });
   });
 
+  describe("Official Campaign Status", function () {
+    let campaignId: bigint;
+
+    before(async function () {
+      // Create a new campaign for official status tests
+      const startTime = await time.latest() + 60;
+      const endTime = startTime + 86400; // 1 day duration
+      const commitmentHash = ethers.keccak256(
+        ethers.AbiCoder.defaultAbiCoder().encode(
+          ["string", "string", "string", "address", "uint256", "uint256", "address", "uint256", "uint256", "uint256", "uint256", "uint256", "bytes32"],
+          ["Official Test", "Test for official status", "https://example.com/image.jpg", user1.address, startTime, endTime, ethers.ZeroAddress, ethers.parseEther("10"), ethers.parseEther("5"), ethers.parseEther("15"), 200, 300, ethers.id("secret")]
+        )
+      );
+
+      const tx = await campaigns.createCampaignCommitment(commitmentHash);
+      const receipt = await tx.wait();
+      const event = receipt?.logs.find((log: Log) => log.topics[0] === campaigns.interface.getEventTopic('CampaignCreated'));
+      const decodedEvent = campaigns.interface.decodeEventLog('CampaignCreated', event!.data, event!.topics) as CampaignCreatedEvent;
+      campaignId = decodedEvent.campaignId;
+
+      await campaigns.revealCampaign(
+        campaignId,
+        "Official Test",
+        "Test for official status",
+        "https://example.com/image.jpg",
+        user1.address,
+        startTime,
+        endTime,
+        ethers.ZeroAddress,
+        ethers.parseEther("10"),
+        ethers.parseEther("5"),
+        ethers.parseEther("15"),
+        200,
+        300,
+        ethers.id("secret")
+      );
+    });
+
+    it("Should set isOfficial to true if recipient is owner", async function () {
+      const ownerCampaignId = await createTestCampaign(
+        await time.latest() + 60,
+        await time.latest() + 86460,
+        ethers.parseEther("10"),
+        ethers.parseEther("5"),
+        ethers.parseEther("15"),
+        owner.address // Set owner as recipient
+      );
+
+      const campaign = await campaigns.getCampaign(ownerCampaignId);
+      expect(campaign.isOfficial).to.be.true;
+    });
+
+    it("Should allow recipient to update official status", async function () {
+      await campaigns.connect(user1).setOfficialStatus(campaignId, true);
+      let campaign = await campaigns.getCampaign(campaignId);
+      expect(campaign.isOfficial).to.be.true;
+
+      await campaigns.connect(user1).setOfficialStatus(campaignId, false);
+      campaign = await campaigns.getCampaign(campaignId);
+      expect(campaign.isOfficial).to.be.false;
+    });
+
+    it("Should not allow non-recipient to update official status", async function () {
+      await expect(campaigns.connect(user2).setOfficialStatus(campaignId, true))
+        .to.be.revertedWith("Only recipient can update official status");
+    });
+
+    it("Should correctly report official status", async function () {
+      await campaigns.connect(user1).setOfficialStatus(campaignId, true);
+      expect(await campaigns.isOfficialCampaign(campaignId)).to.be.true;
+
+      await campaigns.connect(user1).setOfficialStatus(campaignId, false);
+      expect(await campaigns.isOfficialCampaign(campaignId)).to.be.false;
+    });
+  });
+
   // Helper function to create a test campaign
-  async function createTestCampaign(startTime: number, endTime: number, targetAmount: bigint, minAmount: bigint, maxAmount: bigint): Promise<bigint> {
+  async function createTestCampaign(
+    startTime: number,
+    endTime: number,
+    targetAmount: bigint,
+    minAmount: bigint,
+    maxAmount: bigint,
+    recipient: string = user1.address // Default to user1 if not specified
+  ): Promise<bigint> {
     const commitmentHash = ethers.keccak256(
       ethers.AbiCoder.defaultAbiCoder().encode(
         ["string", "string", "string", "address", "uint256", "uint256", "address", "uint256", "uint256", "uint256", "uint256", "uint256", "bytes32"],
-        ["Test Campaign", "Test description", "https://example.com/image.jpg", user1.address, startTime, endTime, ethers.ZeroAddress, targetAmount, minAmount, maxAmount, 200, 300, ethers.id("secret")]
+        ["Test Campaign", "Test description", "https://example.com/image.jpg", recipient, startTime, endTime, ethers.ZeroAddress, targetAmount, minAmount, maxAmount, 200, 300, ethers.id("secret")]
       )
     );
 
@@ -679,7 +762,7 @@ describe("Campaigns", function () {
       "Test Campaign",
       "Test description",
       "https://example.com/image.jpg",
-      user1.address,
+      recipient,
       startTime,
       endTime,
       ethers.ZeroAddress,
