@@ -60,6 +60,10 @@ contract Campaigns is Ownable, ReentrancyGuard {
     uint256 public defaultCreatorFeeBasisPoints;
     uint256 public constant MAX_BASIS_POINTS = 10000;
     uint256 public constant MAX_TIME_EXTENSION = 7 days; // Maximum allowed time extension for campaigns
+    // uint256 public constant MAX_DONATIONS_PER_ADDRESS = 100;
+    // uint256 public constant MAX_CAMPAIGNS_PER_ADDRESS = 10;
+    uint256 public constant TIMELOCK_PERIOD = 2 days;
+    uint256 public constant MAX_TOTAL_FEE_BASIS_POINTS = 10000; // 100%
 
     // Mappings
     mapping(uint256 => Campaign) public campaigns;
@@ -68,6 +72,9 @@ contract Campaigns is Ownable, ReentrancyGuard {
     mapping(address => uint256[]) public campaignsByRecipient;
     mapping(uint256 => uint256[]) public donationsByCampaign;
     mapping(address => uint256[]) public donationsByDonor;
+    mapping(address => uint256) public donationCount;
+    mapping(address => uint256) public campaignCount;
+    mapping(bytes32 => uint256) public timelockExecutionTime;
 
     // Events
     event CampaignCreated(uint256 indexed campaignId, address indexed owner, string name, bytes32 commitmentHash);
@@ -75,6 +82,10 @@ contract Campaigns is Ownable, ReentrancyGuard {
     event DonationMade(uint256 indexed campaignId, uint256 indexed donationId, address indexed donor, uint256 amount);
     event CampaignDeleted(uint256 indexed campaignId);
     event RefundClaimed(uint256 indexed campaignId, uint256 indexed donationId, address indexed donor, uint256 amount);
+    event ProtocolFeeUpdated(uint256 newFee);
+    event ProtocolFeeRecipientUpdated(address newRecipient);
+    event DefaultReferralFeeUpdated(uint256 newFee);
+    event DefaultCreatorFeeUpdated(uint256 newFee);
 
     /**
      * @dev Constructor to initialize the Campaigns contract
@@ -108,6 +119,9 @@ contract Campaigns is Ownable, ReentrancyGuard {
      * @return campaignId The ID of the created campaign
      */
     function createCampaignCommitment(bytes32 _commitmentHash) external returns (uint256) {
+        // require(campaignCount[msg.sender] < MAX_CAMPAIGNS_PER_ADDRESS, "Campaign limit reached");
+        campaignCount[msg.sender]++;
+
         uint256 campaignId = nextCampaignId++;
         
         // Store the commitment hash temporarily
@@ -169,6 +183,8 @@ contract Campaigns is Ownable, ReentrancyGuard {
         require(_maxAmount == 0 || _maxAmount >= _minAmount, "Max amount must be greater than or equal to min amount");
         require(_referralFeeBasisPoints <= MAX_BASIS_POINTS, "Invalid referral fee");
         require(_creatorFeeBasisPoints <= MAX_BASIS_POINTS, "Invalid creator fee");
+
+        checkTotalFees(protocolFeeBasisPoints, _referralFeeBasisPoints, _creatorFeeBasisPoints);
 
         // Set the campaign details
         campaign.owner = msg.sender;
@@ -259,6 +275,9 @@ contract Campaigns is Ownable, ReentrancyGuard {
         string memory _message,
         address _referrer
     ) external payable nonReentrant {
+        // require(donationCount[msg.sender] < MAX_DONATIONS_PER_ADDRESS, "Donation limit reached");
+        donationCount[msg.sender]++;
+
         Campaign storage campaign = campaigns[_campaignId];
         require(block.timestamp >= campaign.startTime, "Campaign has not started");
         require(campaign.endTime == 0 || block.timestamp <= campaign.endTime, "Campaign has ended");
@@ -308,32 +327,32 @@ contract Campaigns is Ownable, ReentrancyGuard {
      * @dev Process escrowed donations for a campaign
      * @param _campaignId Campaign ID to process donations for
      */
-    function processEscrowedDonations(uint256 _campaignId) external nonReentrant {
+    function processEscrowedDonations(uint256 _campaignId, uint256 _batchSize) external nonReentrant {
         Campaign storage campaign = campaigns[_campaignId];
         require(campaign.escrowBalance > 0, "No escrowed donations to process");
         require(campaign.totalRaisedAmount >= campaign.minAmount, "Minimum amount not reached");
 
         uint256 escrowBalance = campaign.escrowBalance;
         campaign.escrowBalance = 0;
-
-        // Update state before making transfers
         campaign.netRaisedAmount = campaign.netRaisedAmount.add(escrowBalance);
 
-        // Transfer funds
         _transferFunds(campaign.recipient, escrowBalance);
 
-        // Process fees
         uint256[] memory campaignDonations = donationsByCampaign[_campaignId];
-        for (uint256 i = 0; i < campaignDonations.length; i++) {
+        uint256 processedCount = 0;
+        for (uint256 i = 0; i < campaignDonations.length && processedCount < _batchSize; i++) {
             Donation storage donation = donations[campaignDonations[i]];
             if (donation.protocolFee > 0) {
                 _transferFunds(payable(protocolFeeRecipient), donation.protocolFee);
+                processedCount++;
             }
             if (donation.creatorFee > 0) {
                 _transferFunds(payable(campaign.owner), donation.creatorFee);
+                processedCount++;
             }
             if (donation.referrerFee > 0) {
                 _transferFunds(payable(donation.referrer), donation.referrerFee);
+                processedCount++;
             }
         }
     }
@@ -382,6 +401,9 @@ contract Campaigns is Ownable, ReentrancyGuard {
      * @param _amount Amount to transfer
      */
     function _transferFunds(address payable _recipient, uint256 _amount) internal {
+        // Update state before transfer
+        // (In this case, we don't have a balance to update, but this is where you would do it)
+        
         (bool success, ) = _recipient.call{value: _amount}("");
         require(success, "Transfer failed");
     }
@@ -468,8 +490,10 @@ contract Campaigns is Ownable, ReentrancyGuard {
      * @param _protocolFeeBasisPoints New protocol fee basis points
      */
     function updateProtocolFeeBasisPoints(uint256 _protocolFeeBasisPoints) external onlyOwner {
-        require(_protocolFeeBasisPoints <= MAX_BASIS_POINTS, "Invalid protocol fee");
+        require(_protocolFeeBasisPoints <= 1000, "Fee cannot exceed 10%");
+        checkTotalFees(_protocolFeeBasisPoints, defaultReferralFeeBasisPoints, defaultCreatorFeeBasisPoints);
         protocolFeeBasisPoints = _protocolFeeBasisPoints;
+        emit ProtocolFeeUpdated(_protocolFeeBasisPoints);
     }
 
     /**
@@ -479,6 +503,7 @@ contract Campaigns is Ownable, ReentrancyGuard {
     function updateProtocolFeeRecipient(address _protocolFeeRecipient) external onlyOwner {
         require(_protocolFeeRecipient != address(0), "Invalid protocol fee recipient");
         protocolFeeRecipient = _protocolFeeRecipient;
+        emit ProtocolFeeRecipientUpdated(_protocolFeeRecipient);
     }
 
     /**
@@ -486,8 +511,10 @@ contract Campaigns is Ownable, ReentrancyGuard {
      * @param _defaultReferralFeeBasisPoints New default referral fee basis points
      */
     function updateDefaultReferralFeeBasisPoints(uint256 _defaultReferralFeeBasisPoints) external onlyOwner {
-        require(_defaultReferralFeeBasisPoints <= MAX_BASIS_POINTS, "Invalid referral fee");
+        require(_defaultReferralFeeBasisPoints <= 1000, "Fee cannot exceed 10%");
+        checkTotalFees(protocolFeeBasisPoints, _defaultReferralFeeBasisPoints, defaultCreatorFeeBasisPoints);
         defaultReferralFeeBasisPoints = _defaultReferralFeeBasisPoints;
+        emit DefaultReferralFeeUpdated(_defaultReferralFeeBasisPoints);
     }
 
     /**
@@ -495,8 +522,10 @@ contract Campaigns is Ownable, ReentrancyGuard {
      * @param _defaultCreatorFeeBasisPoints New default creator fee basis points
      */
     function updateDefaultCreatorFeeBasisPoints(uint256 _defaultCreatorFeeBasisPoints) external onlyOwner {
-        require(_defaultCreatorFeeBasisPoints <= MAX_BASIS_POINTS, "Invalid creator fee");
+        require(_defaultCreatorFeeBasisPoints <= 1000, "Fee cannot exceed 10%");
+        checkTotalFees(protocolFeeBasisPoints, defaultReferralFeeBasisPoints, _defaultCreatorFeeBasisPoints);
         defaultCreatorFeeBasisPoints = _defaultCreatorFeeBasisPoints;
+        emit DefaultCreatorFeeUpdated(_defaultCreatorFeeBasisPoints);
     }
 
     /**
@@ -573,5 +602,33 @@ contract Campaigns is Ownable, ReentrancyGuard {
      */
     function isOfficialCampaign(uint256 _campaignId) external view returns (bool) {
         return campaigns[_campaignId].isOfficial;
+    }
+
+    /**
+     * @dev Propose a protocol fee update
+     * @param _newFee New protocol fee basis points
+     */
+    function proposeProtocolFeeUpdate(uint256 _newFee) external onlyOwner {
+        bytes32 proposalId = keccak256(abi.encodePacked("updateProtocolFee", _newFee));
+        timelockExecutionTime[proposalId] = block.timestamp + TIMELOCK_PERIOD;
+    }
+
+    /**
+     * @dev Execute a proposed protocol fee update
+     * @param _newFee New protocol fee basis points
+     */
+    function executeProtocolFeeUpdate(uint256 _newFee) external onlyOwner {
+        bytes32 proposalId = keccak256(abi.encodePacked("updateProtocolFee", _newFee));
+        require(block.timestamp >= timelockExecutionTime[proposalId], "Timelock period not elapsed");
+        require(_newFee <= 1000, "Fee cannot exceed 10%");
+        checkTotalFees(_newFee, defaultReferralFeeBasisPoints, defaultCreatorFeeBasisPoints);
+        protocolFeeBasisPoints = _newFee;
+        delete timelockExecutionTime[proposalId];
+        emit ProtocolFeeUpdated(_newFee);
+    }
+
+    // Add this function to check total fees
+    function checkTotalFees(uint256 _protocolFee, uint256 _referralFee, uint256 _creatorFee) internal pure {
+        require(_protocolFee + _referralFee + _creatorFee <= MAX_TOTAL_FEE_BASIS_POINTS, "Total fees exceed 100%");
     }
 }

@@ -1,3 +1,10 @@
+# Crowded Fund - EVM implementation of Campaigns Escrow Contract
+Provide a way to raise funds, for yourself as an organization, or on behalf of an organization, through donations, raising on behalf of organizations has an approval process to indicate whether the campaign is "official". Contract can also function as an escrow with minimum target amounts, refunding donors if the target is not met. Campaigns can be time-based.
+
+
+An EVM adaptation of the NEAR Campaign contracts as part of Potlock Protocol
+https://github.com/PotLock/core/tree/feat/campaigns/contracts/campaigns For more on Potlock https://docs.potlock.io 
+
 # 🏗 Scaffold-ETH 2
 
 
@@ -213,6 +220,19 @@ To run the tests, use the command `yarn hardhat test` in the project directory.
 For more detailed information on the contract implementation and tests, please refer to the `Campaigns.sol` and `Campaigns.ts` files in the repository.
 
 
-# Potlock
-based on potlock campaign contract on NEAR https://github.com/PotLock/core/tree/feat/campaigns/contracts/campaigns
-For more on Potlock https://docs.potlock.io 
+## Campigns and Referrals
+Referrals are utilized for campaign creators, Potlock protocol, and referrers. These amounts are also escrowed until the campaign is successful.
+
+Referral fees are calculated at the time of donation
+. When a user makes a donation, the contract calculates the referral fee based on the referralFeeBasisPoints set for the campaign.
+For campaigns with a minimum amount (escrow-based):
+If the campaign's minimum amount has not been reached, all funds, including the referral fee, are held in escrow1
+. The escrowBalance of the campaign is increased by the full donation amount.
+The referral fee is not immediately paid out. Instead, it's stored as part of the Donation struct1
+.
+If the campaign reaches its minimum amount, the processEscrowedDonations function can be called1
+. This function will transfer the escrowed funds, including paying out the referral fees for all donations.
+If the campaign ends without reaching its minimum amount, donors can claim refunds using the claimRefund or claimAllRefunds functions1
+. In this case, the full donation amount is refunded to the donor, including the portion that would have been the referral fee.
+For campaigns without a minimum amount or when the minimum has already been reached:
+The referral fee is immediately transferred to the referrer at the time of donation
