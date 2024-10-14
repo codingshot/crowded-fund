@@ -1,12 +1,12 @@
 # 🏗 Scaffold-ETH 2
 
+
+
+
 <h4 align="center">
   <a href="https://docs.scaffoldeth.io">Documentation</a> |
   <a href="https://scaffoldeth.io">Website</a>
 </h4>
-
-🧪 An open-source, up-to-date toolkit for building decentralized applications (dapps) on the Ethereum blockchain. It's designed to make it easier for developers to create and deploy smart contracts and build user interfaces that interact with those contracts.
-
 ⚙️ Built using NextJS, RainbowKit, Hardhat, Wagmi, Viem, and Typescript.
 
 - ✅ **Contract Hot Reload**: Your frontend auto-adapts to your smart contract as you edit it.
@@ -80,3 +80,87 @@ To know more about its features, check out our [website](https://scaffoldeth.io)
 We welcome contributions to Scaffold-ETH 2!
 
 Please see [CONTRIBUTING.MD](https://github.com/scaffold-eth/scaffold-eth-2/blob/main/CONTRIBUTING.md) for more information and guidelines for contributing to Scaffold-ETH 2.
+
+
+
+
+# Solidity Campaigns Contract Overview
+
+## Overview
+
+This smart contract implements a decentralized fundraising platform on the Ethereum blockchain. It allows users to create and manage fundraising campaigns, accept donations in ETH or ERC20 tokens, and handle the distribution of funds to recipients and fee collectors. The contract is inspired by the [PotLock campaigns contract](https://github.com/PotLock/core/tree/feat/campaigns/contracts/campaigns).
+
+## Features
+
+- Create and manage fundraising campaigns
+- Accept donations in ETH or ERC20 tokens
+- Implement referral and creator fee systems
+- Escrow functionality for campaigns with minimum funding goals
+- Refund mechanism for failed campaigns
+- Flexible fee structure with configurable protocol, referral, and creator fees
+
+## Contract Structure
+
+The main contract `Campaigns.sol` contains the following key components:
+
+1. Campaign and Donation structs
+2. State variables for managing campaign and donation IDs, fees, and configuration
+3. Mappings for storing campaign and donation data
+4. Functions for creating and updating campaigns
+5. Donation processing and refund functions
+6. Getter functions for retrieving campaign and donation information
+7. Admin functions for updating fee structures and withdrawing stuck funds
+
+## Key Functions
+
+### Campaign Management
+
+- `createCampaign`: Create a new fundraising campaign
+- `updateCampaign`: Update an existing campaign (only by owner, before start)
+
+### Donation Handling
+
+- `donate`: Make a donation to a specific campaign
+- `processEscrowedDonations`: Process escrowed donations after reaching the minimum goal
+- `refundDonations`: Refund donations for failed campaigns
+
+### Information Retrieval
+
+- `getCampaign`: Get campaign details
+- `getDonation`: Get donation details
+- `getCampaignsByOwner`: Get campaigns created by a specific owner
+- `getCampaignsByRecipient`: Get campaigns for a specific recipient
+- `getDonationsByCampaign`: Get donations for a specific campaign
+- `getDonationsByDonor`: Get donations made by a specific donor
+
+### Admin Functions
+
+- Update fee structures (protocol, referral, creator)
+- Withdraw stuck ETH or ERC20 tokens (emergency functions)
+
+## Security Considerations
+
+- Uses OpenZeppelin's `Ownable` and `ReentrancyGuard` to enhance security
+- Implements input validation to ensure data integrity
+- Includes emergency functions to withdraw stuck funds, accessible only by the owner
+
+## Gas Optimization
+
+- Uses `uint256` for most numeric values
+- Employs structs to group related data
+- Emits events for important state changes
+
+## Differences from PotLock Implementation
+
+- This Ethereum implementation uses Solidity instead of Rust
+- Adapts to Ethereum's transaction model and global state storage
+- Utilizes OpenZeppelin libraries for standard functionalities
+
+## Future Improvements
+
+- Implement a multi-signature wallet for the protocol fee recipient and contract ownership
+- Add support for batch operations to optimize gas usage
+- Implement a time-lock mechanism for critical parameter changes
+- Develop a factory contract for easier deployment and management of multiple campaign contracts
+
+For more detailed information on the contract implementation, please refer to the `Campaigns.sol` file in the repository.

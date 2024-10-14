@@ -1,13 +1,29 @@
 "use client";
 
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import fs from "fs";
 import type { NextPage } from "next";
+import path from "path";
 import { useAccount } from "wagmi";
 import { BugAntIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { Address } from "~~/components/scaffold-eth";
 
 const Home: NextPage = () => {
   const { address: connectedAddress } = useAccount();
+  const [contractNames, setContractNames] = useState<string[]>([]);
+
+  useEffect(() => {
+    const contractsDir = path.join(process.cwd(), "packages", "hardhat", "contracts");
+    fs.readdir(contractsDir, (err, files) => {
+      if (err) {
+        console.error("Error reading contracts directory:", err);
+        return;
+      }
+      const solFiles = files.filter(file => file.endsWith(".sol"));
+      setContractNames(solFiles);
+    });
+  }, []);
 
   return (
     <>
@@ -29,9 +45,14 @@ const Home: NextPage = () => {
           </p>
           <p className="text-center text-lg">
             Edit your smart contract{" "}
-            <code className="italic bg-base-300 text-base font-bold max-w-full break-words break-all inline-block">
-              YourContract.sol
-            </code>{" "}
+            {contractNames.map((contractName, index) => (
+              <React.Fragment key={index}>
+                <code className="italic bg-base-300 text-base font-bold max-w-full break-words break-all inline-block">
+                  {contractName}
+                </code>
+                {index < contractNames.length - 1 ? ", " : " "}
+              </React.Fragment>
+            ))}{" "}
             in{" "}
             <code className="italic bg-base-300 text-base font-bold max-w-full break-words break-all inline-block">
               packages/hardhat/contracts
